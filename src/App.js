@@ -2,6 +2,7 @@ import React from "react";
 import logo from './logo.svg';
 import './App.css';
 import { geolocated } from "react-geolocated";
+import axios from 'axios';
 
 function deg2rad(deg) {
   return deg * (Math.PI/180)
@@ -21,22 +22,47 @@ function getDistanceFromLatLonInM(lat1,lon1,lat2,lon2) {
   return d;
 }
 
+function guidGenerator() {
+    var S4 = function() {
+       return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
+    };
+    return (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4());
+}
+
 class GeoFence extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { radius: 500, out_range: 0 }
+    this.state = { radius: 500, out_range: 0, latitude: 0, longitude: 0 }
   }
-  componentDidMount() {
-    var location = localStorage.getItem('location');
-    if (!location && this.props.coords) {
-      localStorage.setItem('location', JSON.stringify({'latitude': this.props.coords.latitude, 'longitude': this.props.coords.longitude}));
+  async componentDidMount() {
+    var user = localStorage.getItem('user');
+    if (!user && this.props.coords) {
+      var id = guidGenerator();
+      localStorage.setItem('user', id);
+      var config = {
+        method: 'get',
+        url: `https://manish-geofence-api.herokuapp.com/users/create?user_id=${id}&latitude=${this.props.coords.latitude}&longitude=${this.props.coords.longitude}`,
+        headers: { }
+      };
+
+      const res = await axios(config);
+      console.log(res);
     }
-    this.setState({ ...this.state, radius: localStorage.getItem('radius') ? localStorage.getItem('radius') : 500 });
+    var config2 = {
+      method: 'get',
+      url: 'https://manish-geofence-api.herokuapp.com/users/get_user?user_id='+localStorage.getItem('user'),
+      headers: { }
+    };
+
+    const response = await axios(config2);
+    console.log(JSON.stringify(response.data));
+    this.setState({ ...this.state, latitude: response.data.latitude, longitude: response.data.longitude, radius: localStorage.getItem('radius') ? localStorage.getItem('radius') : 500 })
     setInterval(() => {
-      location = JSON.parse(localStorage.getItem('location'));
-      var dist = getDistanceFromLatLonInM(location.latitude, location.longitude, this.props.coords.latitude, this.props.coords.longitude);
+      console.log(this.props.coords);
+      var dist = getDistanceFromLatLonInM(response.data.latitude, response.data.longitude, this.props.coords.latitude, this.props.coords.longitude);
       this.setState({ ...this.state, out_range: dist });
     }, 1000);
+    
   }
   render() {
     return (
@@ -56,6 +82,12 @@ class GeoFence extends React.Component {
                 this.setState({ ...this.state, radius: document.getElementById("password").value })
                 localStorage.setItem('radius', document.getElementById("password").value );
               }}>Save</button>
+          </div>
+          <div className='range-message'>
+            Latitude: {this.state.latitude}
+          </div>
+          <div className='range-message'>
+            Longitude: {this.state.longitude}
           </div>
           {this.state.out_range <= this.state.radius ? (<div className='range-message'>
               You are in range!
